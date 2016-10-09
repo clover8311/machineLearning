@@ -1,0 +1,103 @@
+---
+title: "Practical Machine Learning Project"
+author: "Yanze Song"
+date: "October 6, 2016"
+output: html_document
+---
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+The training data for this project:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+The test data:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+## Prepare and clean data
+```{r}
+library(caret)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+# Loading the training data and replace all missing with "NA"
+trainingData <- read.csv("/Users/yanze/github/machineLearning/pml-training.csv", na.strings=c("NA","#DIV/0!", ""))
+
+# Loading the testing data and replace all missing with "NA"
+testingData <- read.csv('/Users/yanze/github/machineLearning/pml-testing.csv', na.strings=c("NA","#DIV/0!", ""))
+
+# Check dimensions for number of variables and number of observations
+dim(trainingData)
+dim(testingData)
+
+set.seed(123456)
+trainset <- createDataPartition(trainingData$classe, p = 0.8, list = FALSE);
+TrainingSet <- trainingData[trainset, ];
+ValidationSet <- trainingData[-trainset, ];
+
+#Delete all NA columns to clean the data
+TrainingSet <- TrainingSet[,colSums(is.na(TrainingSet)) == 0];
+ValidationSet <- ValidationSet[,colSums(is.na(ValidationSet)) == 0];
+testingData <- testingData[,colSums(is.na(testingData)) == 0];
+
+# exclude near zero variance features
+zeroCol <- nearZeroVar(TrainingSet)
+TrainingSet <- TrainingSet[, -zeroCol];
+ValidationSet <- ValidationSet[, -zeroCol];
+testingData <- testingData[, -zeroCol];
+
+```
+
+## Feature Selection
+
+```{r}
+# remove the descreptive columns
+descriptCol <- c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", 
+    "cvtd_timestamp", "new_window", "num_window");
+TrainingSet <- TrainingSet[,!names(TrainingSet) %in% descriptCol];
+ValidationSet <- ValidationSet[,!names(ValidationSet) %in% descriptCol];
+testingData <- testingData[,!names(testingData) %in% descriptCol];
+```
+
+## Get the whole picture
+```{r}
+plot(TrainingSet$classe, col="green", main="Bar Plot for classe value distribution", xlab="classe levels", ylab="Frequency")
+
+```
+
+## Model one: Decision Tree
+```{r}
+
+modelDecisionTree <- rpart(classe ~ ., data=TrainingSet, method="class");
+
+# Predicting:
+prediction1 <- predict(modelDecisionTree, ValidationSet, type = "class");
+
+# Plot of the Decision Tree
+rpart.plot(modelDecisionTree, main="Decision Tree", extra=102, under=TRUE, faclen=0);
+
+confusionMatrix(prediction1, ValidationSet$classe)
+
+```
+
+## Model two: Random Forest
+```{r}
+modelRandomForest <- randomForest(classe ~. , data=TrainingSet, method="class")
+
+# Predicting:
+prediction2 <- predict(modelRandomForest, ValidationSet, type = "class")
+
+# Test results on subTesting data set:
+confusionMatrix(prediction2, ValidationSet$classe)
+```
+
+## Summary
+
+From two model training result, we choose Random Forest over Decision Tree since the overall accuracy for Random Forecast is 99.5%, which is much higher than Decision Tree, 74.9%.
+
+## Testing with original testing data
+```{r}
+# predict outcome levels on the original Testing data set using Random Forest algorithm
+predictfinal <- predict(modelRandomForest, testingData, type="class")
+print(predictfinal)
+```
